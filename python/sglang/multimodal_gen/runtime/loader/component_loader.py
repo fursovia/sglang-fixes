@@ -217,11 +217,14 @@ class ComponentLoader(ABC):
                 trust_remote_code=server_args.trust_remote_code,
                 revision=server_args.revision,
             )
+            # Use bfloat16 to match diffusers behavior and reduce memory usage.
+            # Without this, native models load in fp32 (3x memory).
             return AutoModel.from_pretrained(
                 component_model_path,
                 config=config,
                 trust_remote_code=server_args.trust_remote_code,
                 revision=server_args.revision,
+                torch_dtype=torch.bfloat16,
             )
         elif transformers_or_diffusers == "diffusers":
             from diffusers import AutoModel
@@ -230,6 +233,7 @@ class ComponentLoader(ABC):
                 component_model_path,
                 revision=server_args.revision,
                 trust_remote_code=server_args.trust_remote_code,
+                torch_dtype=torch.bfloat16,
             )
         else:
             raise ValueError(f"Unsupported library: {transformers_or_diffusers}")
