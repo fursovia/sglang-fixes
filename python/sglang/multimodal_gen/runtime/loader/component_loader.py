@@ -720,6 +720,9 @@ class TransformerLoader(ComponentLoader):
         )
 
         # Load the model using FSDP loader
+        # Use load_to_cpu_first=True to avoid OOM when other components (like text_encoder)
+        # are already on GPU. This mirrors diffusers' behavior where from_pretrained()
+        # loads to CPU, then .to("cuda") moves to GPU.
         assert server_args.hsdp_shard_dim is not None
         model = maybe_load_fsdp_model(
             model_cls=model_cls,
@@ -737,6 +740,7 @@ class TransformerLoader(ComponentLoader):
             reduce_dtype=torch.float32,
             output_dtype=None,
             strict=False,
+            load_to_cpu_first=True,
         )
 
         total_params = sum(p.numel() for p in model.parameters())

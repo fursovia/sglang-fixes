@@ -80,6 +80,7 @@ def maybe_load_fsdp_model(
     output_dtype: torch.dtype | None = None,
     pin_cpu_memory: bool = True,
     strict: bool = True,
+    load_to_cpu_first: bool = False,
 ) -> torch.nn.Module:
     """
     Load the model with FSDP if is training, else load the model without FSDP.
@@ -134,10 +135,17 @@ def maybe_load_fsdp_model(
 
     weight_iterator = safetensors_weights_iterator(weight_dir_list)
     param_names_mapping_fn = get_param_names_mapping(model.param_names_mapping)
+
+    # When load_to_cpu_first is True, load weights to CPU first to avoid OOM
+    # during loading when other components are already on GPU.
+    # This mirrors diffusers' behavior: from_pretrained() loads to CPU,
+    # then .to("cuda") moves to GPU.
+    loading_device = torch.device("cpu") if load_to_cpu_first else device
+
     load_model_from_full_model_state_dict(
         model,
         weight_iterator,
-        device,
+        loading_device,
         default_dtype,
         strict=strict,
         cpu_offload=cpu_offload,
@@ -149,6 +157,12 @@ def maybe_load_fsdp_model(
         # Avoid unintended computation graph accumulation during inference
         if isinstance(p, torch.nn.Parameter):
             p.requires_grad = False
+
+    # If we loaded to CPU first, now move to the target device (GPU)
+    if load_to_cpu_first and device.type != "cpu":
+        logger.info("Moving model from CPU to %s after loading", device)
+        model = model.to(device)
+
     return model
 
 
